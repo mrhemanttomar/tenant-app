@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package0:cloud_firestore/cloud_firestore.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Connects directly to your Firebase Project: tenant-app-8576c
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: "AIzaSyBw4LTLSH-zzkOdXaAr1U6HYebyr_7uD9Y",
-      authDomain: "tenant-app-8576c.firebaseapp.com",
-      projectId: "tenant-app-8576c",
-      storageBucket: "tenant-app-8576c.firebasestorage.app",
-      messagingSenderId: "812549040427",
-      appId: "1:812549040427:web:851ca6df44d0d7da037d6e",
-    ),
-  );
-  
+  try {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyBw4LTLSH-zzkOdXaAr1U6HYebyr_7uD9Y",
+        authDomain: "tenant-app-8576c.firebaseapp.com",
+        projectId: "tenant-app-8576c",
+        storageBucket: "tenant-app-8576c.firebasestorage.app",
+        messagingSenderId: "812549040427",
+        appId: "1:812549040427:web:851ca6df44d0d7da037d6e",
+      ),
+    );
+  } catch (e) {
+    debugPrint("Firebase initialization note: $e");
+  }
   runApp(const TenantManagementApp());
 }
 
@@ -27,12 +28,13 @@ class TenantManagementApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'PropManager Cloud',
+      title: 'PropManager',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1E3A8A),
           primary: const Color(0xFF1E3A8A),
+          secondary: const Color(0xFF0D9488),
         ),
         useMaterial3: true,
       ),
@@ -42,18 +44,29 @@ class TenantManagementApp extends StatelessWidget {
 }
 
 // ----------------- AUTH GATE -----------------
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
   @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _skipAuthForDemo = false;
+
+  @override
   Widget build(BuildContext context) {
+    if (_skipAuthForDemo) {
+      return MainDashboardScreen(onLogout: () => setState(() => _skipAuthForDemo = false));
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.hasData) {
-          return const MainDashboardScreen();
+          return MainDashboardScreen(onLogout: () => FirebaseAuth.instance.signOut());
         }
-        return const LoginScreen();
+        return LoginScreen(onSkipDemo: () => setState(() => _skipAuthForDemo = true));
       },
     );
   }
@@ -61,7 +74,8 @@ class AuthGate extends StatelessWidget {
 
 // ----------------- LOGIN SCREEN -----------------
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final VoidCallback onSkipDemo;
+  const LoginScreen({super.key, required this.onSkipDemo});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -75,12 +89,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submitAuth() async {
     if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email and password')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
       return;
     }
-
     setState(() => _isLoading = true);
     try {
       if (_isSignUp) {
@@ -92,7 +103,6 @@ class _LoginScreenState extends State<LoginScreen> {
           'email': _emailController.text.trim(),
           'role': 'landlord',
           'isSubscribed': false,
-          'createdAt': FieldValue.serverTimestamp(),
         });
       } else {
         await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -101,9 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Auth Error: ${e.toString()}')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -125,19 +133,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const Icon(Icons.apartment_rounded, size: 60, color: Color(0xFF1E3A8A)),
                   const SizedBox(height: 10),
-                  Text(_isSignUp ? 'Create Account' : 'Landlord Login',
+                  Text(_isSignUp ? 'Create Landlord Account' : 'Landlord Login',
                       style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 20),
-                  TextField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(labelText: 'Email Address', border: OutlineInputBorder()),
-                  ),
+                  TextField(controller: _emailController, decoration: const InputDecoration(labelText: 'Email Address', border: OutlineInputBorder())),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
-                  ),
+                  TextField(controller: _passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder())),
                   const SizedBox(height: 20),
                   _isLoading
                       ? const CircularProgressIndicator()
@@ -154,6 +155,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: () => setState(() => _isSignUp = !_isSignUp),
                     child: Text(_isSignUp ? 'Already have an account? Log In' : 'New Landlord? Create Account'),
                   ),
+                  const Divider(),
+                  OutlinedButton.icon(
+                    onPressed: widget.onSkipDemo,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Explore Full UI in Preview Mode'),
+                  )
                 ],
               ),
             ),
@@ -164,148 +171,366 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ----------------- MAIN DASHBOARD -----------------
+// ----------------- FULL DASHBOARD (PROPMANAGER) -----------------
+class PropertyItem {
+  final String id;
+  final String name;
+  final String address;
+  final int totalUnits;
+
+  PropertyItem({required this.id, required this.name, required this.address, required this.totalUnits});
+}
+
+class TenantItem {
+  final String name;
+  final String propertyName;
+  final double rentAmount;
+  final int dueDay;
+  bool isPaid;
+
+  TenantItem({
+    required this.name,
+    required this.propertyName,
+    required this.rentAmount,
+    required this.dueDay,
+    this.isPaid = false,
+  });
+}
+
 class MainDashboardScreen extends StatefulWidget {
-  const MainDashboardScreen({super.key});
+  final VoidCallback onLogout;
+  const MainDashboardScreen({super.key, required this.onLogout});
 
   @override
   State<MainDashboardScreen> createState() => _MainDashboardScreenState();
 }
 
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
-  final String _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+  int _selectedIndex = 0;
+  bool _isSubscribed = false;
+  bool _isAdmin = false;
 
-  void _showAddPropertyDialog(int currentPropertyCount) {
-    final nameCtrl = TextEditingController();
-    final addressCtrl = TextEditingController();
+  final List<PropertyItem> _properties = [
+    PropertyItem(id: '1', name: 'Sunrise Apartments', address: 'Sector 62, Noida', totalUnits: 4),
+    PropertyItem(id: '2', name: 'Green Valley Villa', address: 'Indiranagar, Bengaluru', totalUnits: 2),
+  ];
 
-    if (currentPropertyCount >= 2) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Free Limit Reached (2/2)'),
-          content: const Text('Free tier accounts can manage up to 2 properties. Upgrade to Pro for unlimited access.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-          ],
-        ),
-      );
-      return;
+  final List<TenantItem> _tenants = [
+    TenantItem(name: 'Rahul Sharma', propertyName: 'Sunrise Apts (Unit 101)', rentAmount: 18000, dueDay: 5, isPaid: true),
+    TenantItem(name: 'Priya Verma', propertyName: 'Sunrise Apts (Unit 102)', rentAmount: 16500, dueDay: 5, isPaid: false),
+    TenantItem(name: 'Amit Patel', propertyName: 'Green Valley Villa', rentAmount: 25000, dueDay: 10, isPaid: false),
+  ];
+
+  void _addProperty(String name, String address, int units) {
+    setState(() {
+      _properties.add(PropertyItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: name,
+        address: address,
+        totalUnits: units,
+      ));
+    });
+
+    // Save to cloud if logged in
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      FirebaseFirestore.instance.collection('properties').add({
+        'landlordId': user.uid,
+        'name': name,
+        'address': address,
+        'totalUnits': units,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
     }
+  }
 
+  void _checkAndAddProperty() {
+    if (_isAdmin || _isSubscribed || _properties.length < 2) {
+      _showAddPropertyBottomSheet();
+    } else {
+      _showPaywallDialog();
+    }
+  }
+
+  void _showPaywallDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add New Property'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Property Name')),
-            TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'Address')),
+        title: Row(
+          children: const [
+            Icon(Icons.workspace_premium, color: Colors.amber, size: 28),
+            SizedBox(width: 8),
+            Text('Free Limit Reached'),
           ],
+        ),
+        content: const Text(
+          'Free landlords can manage up to 2 properties.\n\nUpgrade to Pro Plan for ₹499/month to manage unlimited properties!',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () async {
-              if (nameCtrl.text.isNotEmpty) {
-                await FirebaseFirestore.instance.collection('properties').add({
-                  'landlordId': _uid,
-                  'name': nameCtrl.text,
-                  'address': addressCtrl.text,
-                  'createdAt': FieldValue.serverTimestamp(),
-                });
-                if (mounted) Navigator.pop(context);
-              }
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E3A8A)),
+            onPressed: () {
+              Navigator.pop(context);
+              _showUpgradeModal();
             },
-            child: const Text('Save to Firebase'),
+            child: const Text('Upgrade to Pro', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
   }
 
+  void _showUpgradeModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.stars_rounded, size: 60, color: Colors.amber),
+            const SizedBox(height: 10),
+            const Text('Upgrade to Pro Plan', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('Unlimited Properties • WhatsApp Reminders • Auto Invoices', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: const [
+                  Text('Monthly Plan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text('₹499 / mo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E3A8A))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E3A8A)),
+                onPressed: () {
+                  setState(() => _isSubscribed = true);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Subscribed Successfully! Unlimited access unlocked.')),
+                  );
+                },
+                child: const Text('Pay with Razorpay (Demo)', style: TextStyle(color: Colors.white, fontSize: 16)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddPropertyBottomSheet() {
+    final nameController = TextEditingController();
+    final addressController = TextEditingController();
+    final unitsController = TextEditingController(text: '1');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Add New Property', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Property Name', border: OutlineInputBorder())),
+            const SizedBox(height: 12),
+            TextField(controller: addressController, decoration: const InputDecoration(labelText: 'Address', border: OutlineInputBorder())),
+            const SizedBox(height: 12),
+            TextField(controller: unitsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Total Units/Rooms', border: OutlineInputBorder())),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E3A8A)),
+                onPressed: () {
+                  if (nameController.text.isNotEmpty && addressController.text.isNotEmpty) {
+                    _addProperty(nameController.text, addressController.text, int.tryParse(unitsController.text) ?? 1);
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text('Save Property', style: TextStyle(color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    double totalCollected = _tenants.where((t) => t.isPaid).fold(0, (sum, t) => sum + t.rentAmount);
+    double totalPending = _tenants.where((t) => !t.isPaid).fold(0, (sum, t) => sum + t.rentAmount);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PropManager Live', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('PropManager Pro', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: const Color(0xFF1E3A8A),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () => FirebaseAuth.instance.signOut(),
-          ),
+          Row(
+            children: [
+              const Text('Admin', style: TextStyle(color: Colors.white, fontSize: 12)),
+              Switch(
+                value: _isAdmin,
+                activeColor: Colors.amber,
+                onChanged: (val) {
+                  setState(() => _isAdmin = val);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(val ? 'Admin Mode (Limits Bypassed)' : 'Landlord Mode')),
+                  );
+                },
+              ),
+              IconButton(icon: const Icon(Icons.logout, color: Colors.white), onPressed: widget.onLogout),
+            ],
+          )
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('properties')
-            .where('landlordId', isEqualTo: _uid)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+      body: _selectedIndex == 0 ? _buildDashboardTab(totalCollected, totalPending) : _buildTenantsTab(),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _checkAndAddProperty,
+        backgroundColor: const Color(0xFF1E3A8A),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: Text('Add Property (${_properties.length}/2)', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (idx) => setState(() => _selectedIndex = idx),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.apartment), label: 'Properties'),
+          NavigationDestination(icon: Icon(Icons.people), label: 'Tenants'),
+        ],
+      ),
+    );
+  }
 
-          final properties = snapshot.data!.docs;
-
-          return ListView(
-            padding: const EdgeInsets.all(16),
+  Widget _buildDashboardTab(double collected, double pending) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!_isSubscribed && !_isAdmin)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.amber[100], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber[700]!)),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.amber),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Free Tier: ${_properties.length}/2 properties used.', style: const TextStyle(fontWeight: FontWeight.w600))),
+                  TextButton(onPressed: _showUpgradeModal, child: const Text('Upgrade')),
+                ],
+              ),
+            ),
+          Row(
             children: [
-              Card(
-                color: Colors.blue[50],
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Properties Managed:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text('${properties.length} / 2', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E3A8A))),
-                    ],
+              Expanded(
+                child: Card(
+                  color: Colors.green[50],
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Collected', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text('₹${collected.toInt()}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-              const Text('Firebase Cloud Database', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              if (properties.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(20.0),
-                  child: Text('No properties found in your database. Tap + below to save your first property to Firebase!', textAlign: TextAlign.center),
-                ),
-              ...properties.map((doc) {
-                Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: const Icon(Icons.home_work, color: Color(0xFF1E3A8A)),
-                    title: Text(data['name'] ?? 'Property', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(data['address'] ?? ''),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      onPressed: () => FirebaseFirestore.instance.collection('properties').doc(doc.id).delete(),
+              Expanded(
+                child: Card(
+                  color: Colors.orange[50],
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Pending Rent', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text('₹${pending.toInt()}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      ],
                     ),
                   ),
-                );
-              }),
+                ),
+              ),
             ],
-          );
-        },
+          ),
+          const SizedBox(height: 20),
+          const Text('Your Properties', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          ..._properties.map((p) => Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const CircleAvatar(backgroundColor: Color(0xFF1E3A8A), child: Icon(Icons.home, color: Colors.white)),
+                  title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('${p.address} • ${p.totalUnits} Units'),
+                  trailing: const Icon(Icons.chevron_right),
+                ),
+              )),
+          const SizedBox(height: 80),
+        ],
       ),
-      floatingActionButton: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('properties')
-            .where('landlordId', isEqualTo: _uid)
-            .snapshots(),
-        builder: (context, snapshot) {
-          int count = snapshot.hasData ? snapshot.data!.docs.length : 0;
-          return FloatingActionButton.extended(
-            backgroundColor: const Color(0xFF1E3A8A),
-            onPressed: () => _showAddPropertyDialog(count),
-            icon: const Icon(Icons.add, color: Colors.white),
-            label: Text('Add Property ($count/2)', style: const TextStyle(color: Colors.white)),
-          );
-        },
-      ),
+    );
+  }
+
+  Widget _buildTenantsTab() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _tenants.length,
+      itemBuilder: (context, idx) {
+        final t = _tenants[idx];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: t.isPaid ? Colors.green[100] : Colors.orange[100],
+              child: Icon(t.isPaid ? Icons.check : Icons.priority_high, color: t.isPaid ? Colors.green : Colors.orange),
+            ),
+            title: Text(t.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('${t.propertyName}\nDue: ${t.dueDay}th of month'),
+            isThreeLine: true,
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('₹${t.rentAmount.toInt()}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 4),
+                GestureDetector(
+                  onTap: () => setState(() => t.isPaid = !t.isPaid),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: t.isPaid ? Colors.green : Colors.orange, borderRadius: BorderRadius.circular(12)),
+                    child: Text(t.isPaid ? 'PAID' : 'PENDING', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
