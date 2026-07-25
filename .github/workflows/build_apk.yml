@@ -24,7 +24,7 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Generate Missing Android Platform Files
+      - name: Generate Android Platform Files
         run: flutter create --platforms=android .
 
       - name: Get Dependencies
@@ -36,5 +36,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tenant-app-release
+          name: tenant-app-v2
           path: build/app/outputs/flutter-apk/app-release.apk
