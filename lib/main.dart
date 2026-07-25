@@ -2,16 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Initializes Firebase backend
-  try {
-    await Firebase.initializeApp();
-  } catch (e) {
-    debugPrint('Firebase init demo mode: $e');
-  }
+  
+  // Connects directly to your Firebase Project: tenant-app-8576c
+  await Firebase.initializeApp(
+    options: const FirebaseOptions(
+      apiKey: "AIzaSyBw4LTLSH-zzkOdXaAr1U6HYebyr_7uD9Y",
+      authDomain: "tenant-app-8576c.firebaseapp.com",
+      projectId: "tenant-app-8576c",
+      storageBucket: "tenant-app-8576c.firebasestorage.app",
+      messagingSenderId: "812549040427",
+      appId: "1:812549040427:web:851ca6df44d0d7da037d6e",
+    ),
+  );
+  
   runApp(const TenantManagementApp());
 }
 
@@ -21,7 +27,7 @@ class TenantManagementApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'PropManager Pro',
+      title: 'PropManager Cloud',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -68,6 +74,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   Future<void> _submitAuth() async {
+    if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter email and password')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       if (_isSignUp) {
@@ -75,7 +88,6 @@ class _LoginScreenState extends State<LoginScreen> {
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
-        // Save initial user profile in Firestore
         await FirebaseFirestore.instance.collection('users').doc(creds.user!.uid).set({
           'email': _emailController.text.trim(),
           'role': 'landlord',
@@ -90,7 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Authentication Error: ${e.toString()}')),
+        SnackBar(content: Text('Error: ${e.toString()}')),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -113,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const Icon(Icons.apartment_rounded, size: 60, color: Color(0xFF1E3A8A)),
                   const SizedBox(height: 10),
-                  Text(_isSignUp ? 'Create Landlord Account' : 'Landlord Login',
+                  Text(_isSignUp ? 'Create Account' : 'Landlord Login',
                       style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 20),
                   TextField(
@@ -161,19 +173,7 @@ class MainDashboardScreen extends StatefulWidget {
 }
 
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
-  int _selectedIndex = 0;
   final String _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-
-  // WhatsApp Reminder Function
-  Future<void> _sendWhatsAppReminder(String phone, String name, double amount) async {
-    final message = "Hello $name, this is a gentle reminder that your rent payment of ₹${amount.toInt()} is due. Please pay via UPI or Bank Transfer. Thank you!";
-    final url = "https://wa.me/91$phone?text=${Uri.encodeComponent(message)}";
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open WhatsApp')));
-    }
-  }
 
   void _showAddPropertyDialog(int currentPropertyCount) {
     final nameCtrl = TextEditingController();
@@ -218,7 +218,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 if (mounted) Navigator.pop(context);
               }
             },
-            child: const Text('Save to Cloud'),
+            child: const Text('Save to Firebase'),
           ),
         ],
       ),
@@ -229,7 +229,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PropManager Cloud', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('PropManager Live', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF1E3A8A),
         actions: [
           IconButton(
@@ -245,7 +245,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          
+
           final properties = snapshot.data!.docs;
 
           return ListView(
@@ -258,19 +258,19 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Free Properties Used:', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text('Properties Managed:', style: TextStyle(fontWeight: FontWeight.bold)),
                       Text('${properties.length} / 2', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E3A8A))),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text('Cloud Saved Properties', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text('Firebase Cloud Database', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               if (properties.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(20.0),
-                  child: Text('No properties added yet. Tap + below to add your first property!', textAlign: TextAlign.center),
+                  child: Text('No properties found in your database. Tap + below to save your first property to Firebase!', textAlign: TextAlign.center),
                 ),
               ...properties.map((doc) {
                 Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
